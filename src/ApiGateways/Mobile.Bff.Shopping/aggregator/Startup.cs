@@ -27,16 +27,26 @@ namespace Microsoft.eShopOnContainers.Mobile.Shopping.HttpAggregator
 {
     public class Startup
     {
-        public Startup(IConfiguration configuration)
+        public Startup(IConfiguration configuration, ILoggerFactory loggerFactory)
         {
             Configuration = configuration;
+            LoggerFactory = loggerFactory;
         }
 
+        public ILoggerFactory LoggerFactory;
         public IConfiguration Configuration { get; }
 
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            var logger = LoggerFactory.CreateLogger<Startup>();
+            logger.LogDebug($"=========== Configuring services =======================");
+            logger.LogDebug($"=========== CatalogUrlHC ${Configuration["CatalogUrlHC"]}");
+            logger.LogDebug($"=========== OrderingUrlHC ${Configuration["OrderingUrlHC"]}");
+            logger.LogDebug($"=========== BasketUrlHC ${Configuration["BasketUrlHC"]}");
+            logger.LogDebug($"=========== IdentityUrlHC ${Configuration["IdentityUrlHC"]}");
+            logger.LogDebug($"=========== PaymentUrlHC ${Configuration["PaymentUrlHC"]}");
+
             services.AddHealthChecks()
                 .AddCheck("self", () => HealthCheckResult.Healthy())
                 .AddUrlGroup(new Uri(Configuration["CatalogUrlHC"]), name: "catalogapi-check", tags: new string[] { "catalogapi" })
@@ -53,13 +63,13 @@ namespace Microsoft.eShopOnContainers.Mobile.Shopping.HttpAggregator
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, ILoggerFactory loggerFactory)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             var pathBase = Configuration["PATH_BASE"];
 
             if (!string.IsNullOrEmpty(pathBase))
             {
-                loggerFactory.CreateLogger<Startup>().LogDebug("Using PATH BASE '{pathBase}'", pathBase);
+                LoggerFactory.CreateLogger<Startup>().LogDebug("Using PATH BASE '{pathBase}'", pathBase);
                 app.UsePathBase(pathBase);
             }
 
