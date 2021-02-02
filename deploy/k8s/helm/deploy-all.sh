@@ -12,8 +12,6 @@ Parameters:
     The name of the AKS cluster. Required when the registry (using the -r parameter) is set to "aks".
   --aks-rg <AKS resource group>
     The resource group for the AKS cluster. Required when the registry (using the -r parameter) is set to "aks".
-  --acr-repo <acr repo>
-    Use <acr> as the image repo. This ACR should already be connected instead of using a secret.
   -b | --build-solution
     Force a solution build before deployment (default: false).
   -d | --dns <dns or ip address> | --dns aks
@@ -39,9 +37,6 @@ Parameters:
   --skip-infrastructure
     Do not deploy infrastructure resources (like sql-data, no-sql or redis).
     This is useful for production environments where infrastructure is hosted outside the Kubernetes cluster.
-  --skip-charts
-    Do not deploy app charts.
-    This is useful for deploying only infrastructure services to the Kubernetes cluster.
   -t | --tag <docker image tag>
     The tag used for the newly created docker images. Default: latest.
   -u | --docker-username <docker username>
@@ -62,9 +57,9 @@ For more information see https://kubernetes.io/docs/tasks/administer-cluster/nam
 END
 }
 
+acr_connected=''
 app_name='eshop'
 aks_name=''
-acr_repo=''
 aks_rg=''
 build_images=''
 clean='yes'
@@ -76,18 +71,17 @@ dns=''
 image_tag='latest'
 push_images=''
 skip_infrastructure=''
-skip_charts=''
 use_local_k8s=''
 namespace='eshop'
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --acr-connected )
+      acr_connected='yes'; shift ;;
     --aks-name )
       aks_name="$2"; shift 2;;
     --aks-rg )
       aks_rg="$2"; shift 2;;
-    --acr-repo )
-      acr_repo="$2"; shift 2;;
     -b | --build-solution )
       build_solution='yes'; shift ;;
     -d | --dns )
@@ -108,8 +102,6 @@ while [[ $# -gt 0 ]]; do
       push_images='yes'; shift ;;
     --skip-infrastructure )
       skip_infrastructure='yes'; shift ;;
-    --skip-charts )
-      skip_charts='yes'; shift ;;
     -t | --tag )
       image_tag="$2"; shift 2;;  
     -u | --docker-username )
@@ -141,7 +133,7 @@ fi
 
 use_custom_registry=''
 
-if [[ -n $container_registry && $push_images ]]; then 
+if [[ -n $container_registry ]] && [[ -z $acr_connected ]]; then 
   echo "################ Log into custom registry $container_registry ##################"
   use_custom_registry='yes'
   if [[ -z $docker_username ]] || [[ -z $docker_password ]]; then
@@ -231,29 +223,25 @@ if [[ !$skip_infrastructure ]]; then
   done  
 fi
 
-if [[ -z $skip_charts ]]; then
-  for chart in "${charts[@]}"
-  do
-      echo "Installing: $chart"
-      if [[ $use_custom_registry ]]; then 
+for chart in "${charts[@]}"
+do
+    echo "Installing: $chart"
+    if [[ $use_custom_registry ]] || [[ $acr_connected ]]; then
+      if [[ -z $acr_connected ]]; then
         helm install "$app_name-$chart" --namespace $namespace --set "ingress.hosts={$dns}" --set inf.registry.server=$container_registry --set inf.registry.login=$docker_username --set inf.registry.pwd=$docker_password --set inf.registry.secretName=eshop-docker-scret --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.tag=$image_tag --set image.pullPolicy=Always $chart 
-      elif [[ $acr_repo && $chart != "eshop-common" ]]; then
-        helm install "$app_name-$chart" --namespace $namespace --set "ingress.hosts={$dns}" --set inf.registry.server=$acr_repo --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.tag=$image_tag --set image.pullPolicy=Always $chart 
-      elif [[ $chart != "eshop-common" ]]; then  # eshop-common is ignored when no secret must be deployed
-        helm install "$app_name-$chart" --namespace $namespace --set "ingress.hosts={$dns}" --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.tag=$image_tag --set image.pullPolicy=Always $chart 
+      elif [[ $chart != "eshop-common" ]]; then
+        # ACR is already connected, so we don't need username/password
+        helm install "$app_name-$chart" --namespace $namespace --set "ingress.hosts={$dns}" --set inf.registry.server=$container_registry --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.tag=$image_tag --set image.pullPolicy=Always $chart 
       fi
-  done
+    elif [[ $chart != "eshop-common" ]]; then  # eshop-common is ignored when no secret must be deployed
+      helm install "$app_name-$chart" --namespace $namespace --set "ingress.hosts={$dns}" --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.tag=$image_tag --set image.pullPolicy=Always $chart 
+    fi
+done
 
-  # use the default tag in the chart rather than an overridden one
-  for chart in "${gateways[@]}"
-  do
-      echo "Installing: $chart"
-      if [[ $use_custom_registry ]]; then 
-        helm install "$app_name-$chart" --namespace $namespace --set "ingress.hosts={$dns}" --set inf.registry.server=$container_registry --set inf.registry.login=$docker_username --set inf.registry.pwd=$docker_password --set inf.registry.secretName=eshop-docker-scret --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.pullPolicy=Always $chart 
-      elif [[ $chart != "eshop-common" ]]; then  # eshop-common is ignored when no secret must be deployed
-        helm install "$app_name-$chart" --namespace $namespace --set "ingress.hosts={$dns}" --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.pullPolicy=Always $chart 
-      fi
-  done
-fi
-
+for chart in "${gateways[@]}"
+do
+    echo "Installing: $chart"
+    # use the default tag instead of the one passed in
+    helm install "$app_name-$chart" --namespace $namespace --set "ingress.hosts={$dns}" --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.pullPolicy=Always $chart 
+done
 echo "FINISHED: Helm charts installed."
