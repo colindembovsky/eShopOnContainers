@@ -166,7 +166,7 @@ if [[ $clean ]]; then
   if [[ -z $(helm ls -q --namespace $namespace | grep "$app_name-$chart") ]]; then
     echo "No previous release found"
   else
-    helm uninstall "$app_name-$chart"
+    helm uninstall "$app_name-$chart" --namespace $namespace
     echo "Previous release deleted"
     waitsecs=5; while [ $waitsecs -gt 0 ]; do echo -ne "$waitsecs\033[0K\r"; sleep 1; : $((waitsecs--)); done
   fi
