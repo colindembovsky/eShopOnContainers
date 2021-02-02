@@ -25,6 +25,10 @@ jobs:
       # - uses: azure/setup-helm@v1
       # - uses: azure/setup-kubectl@v1
 
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
       - uses: azure/aks-set-context@v1
         name: Set AKS context
         with:
