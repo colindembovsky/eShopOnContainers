@@ -1,0 +1,40 @@
+name: Deploy webmvc
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types:
+    - deploy
+  release:
+    types:
+    - created
+
+env:
+  chart: webmvc
+  namespace: eshop
+  app-name: eshop
+  chart-root: deploy/k8s/helm
+
+jobs:
+  DeployToK8s:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v1
+
+      # - uses: azure/setup-helm@v1
+      # - uses: azure/setup-kubectl@v1
+
+      - uses: azure/aks-set-context@v1
+        name: Set AKS context
+        with:
+          creds: '${{ secrets.AZURE_CREDENTIALS }}'
+          cluster-name: ${{ secrets.CLUSTER_NAME }}
+          resource-group: ${{ secrets.RESOURCE_GROUP }}
+      
+      - name: Run script
+        run: |
+          ./deploy-chart.sh -c ${{ env.chart }} --dns aks --aks-name ${{ secrets.CLUSTER_NAME }} --aks-rg ${{ secrets.RESOURCE_GROUP }} -r ${{ secrets.ACR }} -t $TAG --acr-connected
+        env:
+          TAG: linux-dev
+        working-directory: ${{ env.chart-root }}
