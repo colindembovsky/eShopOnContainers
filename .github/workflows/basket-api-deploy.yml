@@ -1,4 +1,4 @@
-name: Deploy webmvc
+name: Deploy basket-api
 
 on:
   workflow_dispatch:
@@ -6,15 +6,16 @@ on:
     types:
     - deploy
   workflow_run:
-    workflows: ["webmvc"]
+    workflows: ["basket-api"]
     branches: [dev]
     types: [completed]
 
 env:
-  chart: webmvc
+  chart: basket-api
   namespace: eshop
   app-name: eshop
   chart-root: deploy/k8s/helm
+  tag: linux-dev
 
 jobs:
   DeployToK8s:
@@ -38,5 +39,5 @@ jobs:
         run: |
           ./deploy-chart.sh -c ${{ env.chart }} --dns aks --aks-name ${{ secrets.CLUSTER_NAME }} --aks-rg ${{ secrets.RESOURCE_GROUP }} -r ${{ secrets.ACR }} -t $TAG --namespace ${{ env.namespace }} --acr-connected
         env:
-          TAG: linux-dev
+          TAG: ${{ env.tag }}
         working-directory: ${{ env.chart-root }}
