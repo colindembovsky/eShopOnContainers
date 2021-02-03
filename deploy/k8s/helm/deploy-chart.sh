@@ -161,25 +161,37 @@ if [[ -z $dns ]]; then
   echo "No DNS specified. Ingress resources will be bound to public IP."
 fi
 
-if [[ $clean ]]; then
+previous_install=''
+if [[ -z $(helm ls -q --namespace $namespace | grep "$app_name-$chart") ]]; then
+  echo "No previous release found"
+else
+  previous_install='yes'
+fi
+  
+if [[ $clean ]] && [[ $previous_install ]]; then
   echo "Cleaning previous helm releases..."
-  if [[ -z $(helm ls -q --namespace $namespace | grep "$app_name-$chart") ]]; then
-    echo "No previous release found"
-  else
-    helm uninstall "$app_name-$chart" --namespace $namespace
-    echo "Previous release deleted"
-    waitsecs=5; while [ $waitsecs -gt 0 ]; do echo -ne "$waitsecs\033[0K\r"; sleep 1; : $((waitsecs--)); done
-  fi
+  helm uninstall "$app_name-$chart" --namespace $namespace
+  echo "Previous release deleted"
+  waitsecs=5; while [ $waitsecs -gt 0 ]; do echo -ne "$waitsecs\033[0K\r"; sleep 1; : $((waitsecs--)); done
+  previous_install=''
 fi
 
 echo "#################### Begin $app_name $chart installation using Helm ####################"
 if [[ $use_custom_registry ]] || [[ $acr_connected ]]; then
   if [[ -z $acr_connected ]]; then
-    helm upgrade --install "$app_name-$chart" --namespace $namespace --set "ingress.hosts={$dns}" --set inf.registry.server=$container_registry --set inf.registry.login=$docker_username --set inf.registry.pwd=$docker_password --set inf.registry.secretName=eshop-docker-scret --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.tag=$image_tag --set image.pullPolicy=Always $chart 
+    if [[ -z $previous_install ]]; then
+      helm upgrade --install "$app_name-$chart" --namespace $namespace --set "ingress.hosts={$dns}" --set inf.registry.server=$container_registry --set inf.registry.login=$docker_username --set inf.registry.pwd=$docker_password --set inf.registry.secretName=eshop-docker-scret --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.tag=$image_tag --set image.pullPolicy=Always $chart 
+    else
+      helm upgrade --install "$app_name-$chart" --namespace $namespace --set "ingress.hosts={$dns}" --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.tag=$image_tag --set image.pullPolicy=Always $chart 
+    fi
   elif [[ $chart != "eshop-common" ]]; then
     # ACR is already connected, so we don't need username/password
-    echo "helm upgrade --install '$app_name-$chart' --namespace $namespace --set 'ingress.hosts={$dns}' --set inf.registry.server=$container_registry --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.tag=$image_tag --set image.pullPolicy=Always $chart"
-    helm upgrade --install "$app_name-$chart" --namespace $namespace --set "ingress.hosts={$dns}" --set inf.registry.server=$container_registry --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.tag=$image_tag --set image.pullPolicy=Always $chart 
+    if [[ -z $previous_install ]]; then
+      helm install "$app_name-$chart" --namespace $namespace --set "ingress.hosts={$dns}" --set inf.registry.server=$container_registry --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.tag=$image_tag --set image.pullPolicy=Always $chart 
+    else
+      # don't set the image repo since it's already set
+      helm upgrade "$app_name-$chart" --namespace $namespace --set "ingress.hosts={$dns}" --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.tag=$image_tag --set image.pullPolicy=Always $chart 
+    fi
   fi
 elif [[ $chart != "eshop-common" ]]; then  # eshop-common is ignored when no secret must be deployed
   helm upgrade --install "$app_name-$chart" --namespace $namespace --set "ingress.hosts={$dns}" --values app.yaml --values inf.yaml --values $ingress_values_file --set app.name=$app_name --set inf.k8s.dns=$dns --set image.tag=$image_tag --set image.pullPolicy=Always $chart 
