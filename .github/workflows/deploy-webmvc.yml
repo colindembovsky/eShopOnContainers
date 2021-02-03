@@ -5,9 +5,10 @@ on:
   repository_dispatch:
     types:
     - deploy
-  release:
-    types:
-    - created
+  workflow_run:
+    workflows: ["webmvc"]
+    branches: [dev]
+    types: [completed]
 
 env:
   chart: webmvc
@@ -21,9 +22,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v1
-
-      # - uses: azure/setup-helm@v1
-      # - uses: azure/setup-kubectl@v1
 
       - uses: azure/login@v1
         with:
