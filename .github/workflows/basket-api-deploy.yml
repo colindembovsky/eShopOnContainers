@@ -15,7 +15,6 @@ env:
   namespace: eshop
   app-name: eshop
   chart-root: deploy/k8s/helm
-  tag: linux-dev
 
 jobs:
   DeployToK8s:
@@ -36,9 +35,16 @@ jobs:
           cluster-name: ${{ secrets.CLUSTER_NAME }}
           resource-group: ${{ secrets.RESOURCE_GROUP }}
       
+      - name: Set branch name as env variable
+        run: |
+          currentbranch=$(echo ${GITHUB_REF##*/})
+          echo "running on $currentbranch"
+          echo "BRANCH=$currentbranch" >> $GITHUB_ENV
+        shell: bash
+
       - name: Run script
         run: |
           ./deploy-chart.sh -c ${{ env.chart }} --dns aks --aks-name ${{ secrets.CLUSTER_NAME }} --aks-rg ${{ secrets.RESOURCE_GROUP }} -r ${{ secrets.ACR }} -t $TAG --namespace ${{ env.namespace }} --acr-connected
         env:
-          TAG: ${{ env.tag }}
+          TAG: ${{ env.BRANCH }}
         working-directory: ${{ env.chart-root }}
