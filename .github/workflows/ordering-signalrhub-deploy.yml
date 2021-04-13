@@ -42,7 +42,7 @@ jobs:
           echo "BRANCH=$currentbranch" >> $GITHUB_ENV
         shell: bash
       
-      - name: Run script
+      - name: Deploy chart
         run: |
           ./deploy-chart.sh -c ${{ env.chart }} --dns aks --aks-name ${{ secrets.CLUSTER_NAME }} --aks-rg ${{ secrets.RESOURCE_GROUP }} -r ${{ secrets.REGISTRY_HOST }} -t $TAG --namespace ${{ env.namespace }} --acr-connected
         env:
